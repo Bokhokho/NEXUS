@@ -1,0 +1,55 @@
+// This is your Prisma schema file
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Contractor {
+  id          String   @id @default(cuid())
+  name        String
+  email       String   @unique
+  phone       String
+  skills      String[]
+  status      String   // responsive, pending, not_responsive
+  assignedTo  String
+  rate        Float
+  location    String
+  lastContact DateTime
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model TeamMember {
+  id                  String   @id @default(cuid())
+  name                String
+  email               String   @unique
+  role                String
+  avatar              String
+  contractorsAssigned Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  message   String
+  type      String   // info, success, warning, error
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  user      String
+  action    String
+  details   String
+  type      String   // import, update, assignment, status_change, login
+  createdAt DateTime @default(now())
+}
