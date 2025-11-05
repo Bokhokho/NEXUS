@@ -1,0 +1,163 @@
+
+
+You are a senior full-stack developer and product designer.
+Your goal is to redesign and expand the existing Next.js 14 + Prisma + Neon + Tailwind + shadcn/ui web app called “Sorcerer.”
+
+It’s currently deployed at https://sourcer-zgsk.vercel.app/. The app already has functional routes like /gate and /importer connected to a Neon Postgres database via Prisma.
+
+You must create a fully modern SaaS dashboard experience that keeps all functionality but adds new pages, better navigation, and a consistent design system.
+
+🧱 1. Core Objectives
+
+Keep all existing business logic (auth gate, importer, database, APIs).
+
+Build a unified dashboard layout with:
+
+Sidebar navigation (collapsible, icon-based, with hover tooltips)
+
+Top navigation bar (user info, notifications, theme toggle, search)
+
+Ensure all pages share the same layout and style system.
+
+Add light/dark mode toggle using shadcn/ui theme system.
+
+All tables must be:
+
+Searchable
+
+Sortable
+
+Filterable
+
+Exportable (CSV or Excel)
+
+Include chart visualizations (bar/pie/line) using recharts or chart.js for:
+
+User activity
+
+Contractor stats
+
+Import performance
+
+Include a real-time “Recent Actions” feed and “Notifications” dropdown.
+
+🧩 2. Pages to Include and Improve
+
+Rebuild the following routes with modern UI and logic hooks:
+
+Route	Purpose
+/gate	Minimal password + identity selector screen with brand logo.
+/importer	Advanced contractor importer with table, filters, and status update.
+/responsive	Manage contractors marked as responsive (filters, export, charts).
+/sourcing	Team view — tabs per member, draggable contractor assignments.
+/dashboard	Central overview page with charts, metrics, and links to other sections.
+/activity	Full audit log view with timestamps, filters, and export.
+/settings	Manage app password, admin passcode, and API keys (local only).
+/team	Manage team members (list, add/remove, assign roles).
+/reports	Generate and download CSV/PDF reports with charts and filters.
+/support	Help center and contact links.
+/notifications	Separate page showing full notification history.
+/profile	User preferences, theme selection, etc.
+/404	Beautiful custom 404 page with the Sorcerer logo and return button.
+
+You may add additional routes that fit logically (like /analytics, /projects, /contracts, etc.) to improve data visibility.
+
+🧠 3. Design System
+
+Framework: Next.js 14 (App Router)
+
+Styling: Tailwind CSS + shadcn/ui + Tailwind Variants
+
+Animations: Framer Motion
+
+Icons: lucide-react
+
+Charts: recharts
+
+State: React Server Components + Hooks
+
+Layout:
+
+Sidebar (left): app logo (“Sorcerer”), main links with icons, hover labels.
+
+Topbar: search bar, theme toggle, notification bell, user avatar dropdown.
+
+Font: a clean modern sans-serif (Inter or Poppins).
+
+Accent Color: pick one complementary to the theme (AI may choose best tone).
+
+Logo: a minimal sorcerer icon in SVG form (AI-generated or from Lucide).
+
+🎨 4. Branding and Feel
+
+App Name: Sorcerer
+
+Mood: professional yet magical — a “smart assistant for contractor sourcing.”
+
+Use subtle gradients, soft shadows, and responsive breakpoints.
+
+Components should look native to Vercel/Dashboard style apps.
+
+Dark mode should feel futuristic with glowing accents.
+
+All pages must be responsive for desktop and tablet.
+
+⚙️ 5. Functionality Enhancements
+
+Global layout wrapper for all routes.
+
+Breadcrumbs for navigation context.
+
+Real-time feedback messages (e.g., success toasts).
+
+Form validation with React Hook Form and Zod.
+
+Modular component structure: /components/ui, /components/layout, /components/dashboard, etc.
+
+Notifications fetched from a mock endpoint or Prisma Notification model.
+
+Activity feed auto-refreshes every few seconds.
+
+Charts update dynamically using mock data.
+
+📦 6. Deliverables
+
+Complete Next.js 14 project structure.
+
+All pages in app/ directory, styled and wired into the sidebar/topbar layout.
+
+Pre-configured tailwind.config.js and components.json for shadcn.
+
+Example Prisma schema extension:
+
+model Notification {
+  id        String   @id @default(cuid())
+  message   String
+  type      String
+  createdAt DateTime @default(now())
+  read      Boolean  @default(false)
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  user      String
+  action    String
+  createdAt DateTime @default(now())
+}
+
+
+components/layout/Sidebar.tsx, Topbar.tsx, and reusable Card/Table components.
+
+Pre-seed data for charts and tables to demo functionality.
+
+Readme section explaining how to add more pages easily.
+
+🚀 7. Output Format
+
+Deliver in one zipped repository structure (or structured code blocks).
+
+All pages ready for direct deployment to Vercel.
+
+Include concise comments explaining structure and customization points.
+
+Focus on clean, reusable code and modular design.
