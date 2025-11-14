@@ -78,7 +78,7 @@ export default function SupportPage() {
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground mb-4">
-              Email our support team and we'll get back to you within 24 hours.
+              Email our support team and we&apos;ll get back to you within 24 hours.
             </p>
             <Button variant="outline" className="w-full">
               Send Email

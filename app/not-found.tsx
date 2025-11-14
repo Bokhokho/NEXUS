@@ -18,7 +18,7 @@ export default function NotFound() {
             Page Not Found
           </h2>
           <p className="text-gray-400">
-            The magic you're looking for doesn't exist at this location.
+            The magic you&apos;re looking for doesn&apos;t exist at this location.
           </p>
         </div>
 
