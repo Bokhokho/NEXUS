@@ -26,7 +26,9 @@ export async function GET(req: Request) {
         nextPageToken ? `&pagetoken=${nextPageToken}` : ""
       }`;
 
-      const res = await fetch(url);
+      const res = await fetch(
+      `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${keyword}+${location}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
+      );
       const data = await res.json();
       if (!res.ok) throw new Error(JSON.stringify(data));
 
