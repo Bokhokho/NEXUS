@@ -1,21 +1,41 @@
 "use client";
 
+import { useEffect, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+
+// FIXED PATHS — match these to your actual structure
 import Sidebar from "@/components/layout/sidebar";
 import Topbar from "@/components/layout/topbar";
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+type DashboardLayoutProps = {
+  children: ReactNode;
+};
+
+export default function DashboardLayout({ children }: DashboardLayoutProps) {
+  const router = useRouter();
+
+  useEffect(() => {
+    const user = localStorage.getItem("nexusUser");
+
+    if (!user) {
+      router.push("/gate");
+      return;
+    }
+
+    const parsed = JSON.parse(user);
+
+    if (!parsed.expiresAt || Date.now() > parsed.expiresAt) {
+      localStorage.removeItem("nexusUser");
+      router.push("/gate");
+    }
+  }, [router]);
+
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="min-h-screen flex bg-background">
       <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col">
         <Topbar />
-        <main className="flex-1 overflow-y-auto bg-background p-6">
-          {children}
-        </main>
+        <main className="flex-1 p-6">{children}</main>
       </div>
     </div>
   );

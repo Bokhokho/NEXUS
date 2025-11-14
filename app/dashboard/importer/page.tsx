@@ -1,87 +1,112 @@
 "use client";
 
-import { mockContractors } from "@/lib/mock-data";
-import { DataTable } from "@/components/dashboard/data-table";
-import { Badge } from "@/components/ui/badge";
+import React, { useState } from "react";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Upload } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Download, Loader2, Search } from "lucide-react";
+import { exportToExcel } from "@/lib/utils";
+
+interface Contractor {
+  name: string;
+  address?: string;
+  phone?: string;
+  website?: string;
+}
 
 export default function ImporterPage() {
-  const columns = [
-    { key: "name", header: "Name" },
-    { key: "email", header: "Email" },
-    { key: "phone", header: "Phone" },
-    {
-      key: "skills",
-      header: "Skills",
-      filterable: true,
-      cell: (contractor: any) => (
-        <div className="flex gap-1 flex-wrap">
-          {contractor.skills.slice(0, 2).map((skill: string) => (
-            <Badge key={skill} variant="secondary">
-              {skill}
-            </Badge>
-          ))}
-          {contractor.skills.length > 2 && (
-            <Badge variant="outline">+{contractor.skills.length - 2}</Badge>
-          )}
-        </div>
-      ),
-    },
-    {
-      key: "status",
-      header: "Status",
-      filterable: true,
-      filterOptions: ["responsive", "pending", "not_responsive"],
-      cell: (contractor: any) => (
-        <Badge
-          variant={
-            contractor.status === "responsive"
-              ? "default"
-              : contractor.status === "pending"
-              ? "secondary"
-              : "destructive"
-          }
-        >
-          {contractor.status}
-        </Badge>
-      ),
-    },
-    { key: "location", header: "Location", filterable: true },
-  ];
+  const [keyword, setKeyword] = useState("");
+  const [location, setLocation] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [results, setResults] = useState<Contractor[]>([]);
+
+  const fetchContractors = async () => {
+    if (!keyword || !location) return alert("Please enter both keyword and location.");
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/maps?keyword=${encodeURIComponent(keyword)}&location=${encodeURIComponent(location)}`);
+      if (!res.ok) throw new Error("Failed to fetch contractors");
+      const data = await res.json();
+      setResults(data.results || []);
+    } catch (err) {
+      console.error(err);
+      alert("Something went wrong while fetching data.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExport = () => exportToExcel(results, "Contractors");
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Contractor Importer</h1>
-          <p className="text-muted-foreground">
-            Import and manage contractor profiles
-          </p>
-        </div>
-        <Button>
-          <Upload className="mr-2 h-4 w-4" />
-          Import Contractors
+      <h1 className="text-3xl font-bold tracking-tight">Google Maps Importer</h1>
+      <p className="text-muted-foreground">
+        Search for contractors directly from Google Maps API and export results.
+      </p>
+
+      <div className="flex flex-wrap gap-3">
+        <Input
+          placeholder="Service (e.g. HVAC, Electrician)"
+          value={keyword}
+          onChange={(e) => setKeyword(e.target.value)}
+          className="max-w-xs"
+        />
+        <Input
+          placeholder="City or State (e.g. Miami, FL)"
+          value={location}
+          onChange={(e) => setLocation(e.target.value)}
+          className="max-w-xs"
+        />
+        <Button onClick={fetchContractors} disabled={loading}>
+          {loading ? <Loader2 className="animate-spin w-4 h-4 mr-2" /> : <Search className="w-4 h-4 mr-2" />}
+          Search
         </Button>
+        {results.length > 0 && (
+          <Button variant="outline" onClick={handleExport}>
+            <Download className="w-4 h-4 mr-2" /> Export
+          </Button>
+        )}
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Import History</CardTitle>
-          <CardDescription>
-            All imported contractors with search, sort, filter, and export (CSV/Excel) capabilities
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <DataTable
-            data={mockContractors}
-            columns={columns}
-            searchKeys={["name", "email", "skills", "location"]}
-            exportFilename="contractors"
-          />
-        </CardContent>
-      </Card>
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Address</TableHead>
+              <TableHead>Phone</TableHead>
+              <TableHead>Website</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {results.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center text-muted-foreground py-6">
+                  {loading ? "Fetching data..." : "No results found"}
+                </TableCell>
+              </TableRow>
+            ) : (
+              results.map((r, i) => (
+                <TableRow key={i}>
+                  <TableCell>{r.name}</TableCell>
+                  <TableCell>{r.address || "-"}</TableCell>
+                  <TableCell>{r.phone || "-"}</TableCell>
+                  <TableCell>
+                    {r.website ? (
+                      <a href={r.website} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">
+                        {r.website}
+                      </a>
+                    ) : (
+                      "-"
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }
