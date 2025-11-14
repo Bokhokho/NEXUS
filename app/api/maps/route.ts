@@ -10,7 +10,12 @@ export async function GET(req: Request) {
 
   if (!keyword || !location || !apiKey) {
     return NextResponse.json(
-      { error: "Missing parameters", keyword, location, apiKeyExists: !!apiKey },
+      {
+        error: "Missing parameters",
+        keyword,
+        location,
+        apiKeyExists: !!apiKey,
+      },
       { status: 400 }
     );
   }
@@ -20,54 +25,66 @@ export async function GET(req: Request) {
     let nextPageToken: string | undefined = undefined;
     let allResults: any[] = [];
 
-    // Fetch all pages (Google usually gives up to 3 pages)
+    // Fetch up to 3 pages
     do {
-      const url = `${BASE_URL}/textsearch/json?query=${encodeURIComponent(query)}&key=${apiKey}${
-        nextPageToken ? `&pagetoken=${nextPageToken}` : ""
-      }`;
+      const url: string = `${BASE_URL}/textsearch/json?query=${encodeURIComponent(
+        query
+      )}&key=${apiKey}${nextPageToken ? `&pagetoken=${nextPageToken}` : ""}`;
 
-      const res = await fetch(
-      `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${keyword}+${location}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
-      );
-      const data = await res.json();
-      if (!res.ok) throw new Error(JSON.stringify(data));
+      const res: Response = await fetch(url);
+      const data: any = await res.json();
+
+      if (!res.ok) {
+        console.error("Google TextSearch Error:", data);
+        throw new Error("Google TextSearch failed");
+      }
 
       allResults = allResults.concat(data.results || []);
       nextPageToken = data.next_page_token;
 
-      // Google requires ~2s delay before next_page_token becomes active
-      if (nextPageToken) await new Promise((r) => setTimeout(r, 2500));
+      // Google needs ~2s for next_page_token activation
+      if (nextPageToken) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
     } while (nextPageToken);
 
-    // Fetch detailed info for each place
+    // Fetch details
     const detailedResults = await Promise.all(
       allResults.map(async (place) => {
         try {
-          const detailUrl = `${BASE_URL}/details/json?place_id=${place.place_id}&fields=name,formatted_address,formatted_phone_number,website,international_phone_number,address_components&key=${apiKey}`;
-          const res = await fetch(detailUrl);
-          const detailData = await res.json();
-          const details = detailData.result || {};
+          const detailUrl = `${BASE_URL}/details/json?place_id=${
+            place.place_id
+          }&fields=name,formatted_address,formatted_phone_number,website,international_phone_number,address_components&key=${apiKey}`;
 
-          // Extract city and state from address components
-          let city = "";
-          let state = "";
-          if (details.address_components) {
-            for (const c of details.address_components) {
+          const res = await fetch(detailUrl);
+          const data = await res.json();
+          const d = data.result || {};
+
+          // Extract city + state
+          let city = "N/A";
+          let state = "N/A";
+
+          if (d.address_components) {
+            for (const c of d.address_components) {
               if (c.types.includes("locality")) city = c.long_name;
-              if (c.types.includes("administrative_area_level_1")) state = c.short_name;
+              if (c.types.includes("administrative_area_level_1"))
+                state = c.short_name;
             }
           }
 
           return {
-            name: details.name || "N/A",
-            city: city || "N/A",
-            state: state || "N/A",
-            phone: details.formatted_phone_number || details.international_phone_number || "N/A",
-            email: "N/A", // Google Places doesn’t return email — we’ll leave this placeholder
-            website: details.website || "N/A",
+            name: d.name || "N/A",
+            city,
+            state,
+            phone:
+              d.formatted_phone_number ||
+              d.international_phone_number ||
+              "N/A",
+            email: "N/A",
+            website: d.website || "N/A",
           };
-        } catch (e) {
-          console.error("Error fetching details:", e);
+        } catch (err) {
+          console.error("Details fetch error:", err);
           return {
             name: place.name || "N/A",
             city: "N/A",
@@ -82,7 +99,10 @@ export async function GET(req: Request) {
 
     return NextResponse.json({ results: detailedResults });
   } catch (err) {
-    console.error("Google Maps fetch failed:", err);
-    return NextResponse.json({ error: "Failed to fetch data" }, { status: 500 });
+    console.error("Maps API error:", err);
+    return NextResponse.json(
+      { error: "Failed to fetch data" },
+      { status: 500 }
+    );
   }
 }
