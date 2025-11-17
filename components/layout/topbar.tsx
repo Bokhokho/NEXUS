@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Moon, Sun, Bell } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,6 @@ export default function Topbar() {
   const { theme, setTheme } = useTheme();
   const router = useRouter();
 
-  // Logged-in user
   const [user, setUser] = useState<{ name: string; role: string } | null>(null);
 
   useEffect(() => {
@@ -53,7 +52,7 @@ export default function Topbar() {
       <div className="flex h-16 items-center px-6 gap-4">
         <div className="flex-1" />
 
-        {/* Theme Toggle */}
+        {/* Theme toggle */}
         <Button
           variant="ghost"
           size="icon"
@@ -64,13 +63,7 @@ export default function Topbar() {
           <span className="sr-only">Toggle theme</span>
         </Button>
 
-        {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5" />
-          <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-red-600" />
-        </Button>
-
-        {/* Profile Menu */}
+        {/* User dropdown */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="relative h-10 w-10 rounded-full">
@@ -82,14 +75,15 @@ export default function Topbar() {
 
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>
-              {user ? user.name : "Unknown User"}
+              {user ? user.name : "User"}
             </DropdownMenuLabel>
+
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => router.push("/dashboard/profile")}>
-              Profile
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={logout} className="text-red-500">
+
+            <DropdownMenuItem
+              onClick={logout}
+              className="text-red-500 cursor-pointer"
+            >
               Logout
             </DropdownMenuItem>
           </DropdownMenuContent>

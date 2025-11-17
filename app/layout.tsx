@@ -7,8 +7,8 @@ import { Toaster } from "@/components/ui/toaster";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Sorcerer - Smart Contractor Sourcing",
-  description: "Professional contractor sourcing platform",
+  title: "NEXUS",
+  description: "Professional GovCon platform",
 };
 
 export default function RootLayout({
