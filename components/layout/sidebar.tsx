@@ -41,8 +41,8 @@ export default function Sidebar() {
     ...(isAdmin
       ? [
           { href: "/dashboard/team", label: "Team", icon: Users },
-          { href: "/dashboard/reports", label: "Reports", icon: FileText },
-          { href: "/dashboard/settings", label: "Settings", icon: Settings },
+          { href: "/dashboard/contracts", label: "Contracts", icon: FileText },
+          { href: "/dashboard/past-performances", label: "Past Performances", icon: Settings },
         ]
       : []),
   ];
