@@ -14,6 +14,10 @@ import {
   Menu,
   ChevronLeft,
   ChevronRight,
+  FileCheck,
+  Search,
+  FolderClosed,
+  FolderClock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -34,15 +38,15 @@ export default function Sidebar() {
 
   const navItems = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { href: "/dashboard/active-bids", label: "Active Bids", icon: Users },
-    { href: "/dashboard/inactive-bids", label: "Inactive Bids", icon: UserCheck },
-    { href: "/dashboard/importer", label: "Importer", icon: Upload },
+    { href: "/dashboard/active-bids", label: "Active Bids", icon: FolderClock },
+    { href: "/dashboard/inactive-bids", label: "Inactive Bids", icon: FolderClosed },
+    { href: "/dashboard/importer", label: "Importer", icon: Search },
+    { href: "/dashboard/contracts", label: "Contracts", icon: FileText },
+    { href: "/dashboard/past-performances", label: "Past Performances", icon: FileCheck },
     // Admin-only
     ...(isAdmin
       ? [
           { href: "/dashboard/team", label: "Team", icon: Users },
-          { href: "/dashboard/contracts", label: "Contracts", icon: FileText },
-          { href: "/dashboard/past-performances", label: "Past Performances", icon: Settings },
         ]
       : []),
   ];
