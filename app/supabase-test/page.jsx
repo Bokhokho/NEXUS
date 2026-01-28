@@ -1,20 +1,26 @@
 "use client";
 
 import { useEffect } from "react";
-import { supabase } from "@/lib/supabaseClient"; // adjust path if needed
+import { supabase } from "@/lib/supabaseClient";
 
 export default function SupabaseTestPage() {
   useEffect(() => {
-    (async () => {
-      const { data, error } = await supabase.from("healthcheck").select("*").limit(1);
-      console.log("SUPABASE TEST:", { data, error });
-    })();
+    async function test() {
+      const { data, error } = await supabase
+        .from("active-bids") // 👈 EXACT table name
+        .select("*");
+
+      console.log("SUPABASE DATA:", data);
+      console.log("SUPABASE ERROR:", error);
+    }
+
+    test();
   }, []);
 
   return (
-    <main style={{ padding: 24 }}>
+    <div style={{ padding: 24 }}>
       <h1>Supabase Test</h1>
-      <p>Open the browser console. You should see SUPABASE TEST with data or an empty array.</p>
-    </main>
+      <p>Open the browser console.</p>
+    </div>
   );
 }
