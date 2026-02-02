@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { supabase } from "@/lib/supabaseClient";
 import { DataTable } from "@/components/dashboard/data-table";
 import {
   Dialog,
@@ -88,13 +89,7 @@ type Filters = {
 
 export default function ActiveBidsPage() {
   const [mounted, setMounted] = useState(false);
-  const [bids, setBids] = useState<Bid[]>(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("bids");
-      return stored ? JSON.parse(stored) : [];
-    }
-    return [];
-  });
+  const [bids, setBids] = useState<Bid[]>([]);
 
   const [filters, setFilters] = useState<Filters>(() => {
     if (typeof window !== "undefined") {
@@ -170,13 +165,58 @@ export default function ActiveBidsPage() {
 
   useEffect(() => setMounted(true), []);
   useEffect(() => {
-    if (mounted) {
-      localStorage.setItem("bids", JSON.stringify(bids));
-      localStorage.setItem("bidFilters", JSON.stringify(filters));
-      /* ✅ NEW: persist applied filters */
-      localStorage.setItem("bidAppliedFilters", JSON.stringify(appliedFilters));
+  if (!mounted) return;
+
+  (async () => {
+    try {
+      const { data, error } = await supabase
+        .from("active-bids")
+        .select("payload")
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
+
+      const loaded = (data ?? []).map((r: any) => r.payload as Bid);
+
+      setBids(loaded);
+    } catch (e) {
+      console.error("Failed loading bids from Supabase:", e);
     }
-  }, [bids, filters, appliedFilters, mounted]);
+  })();
+}, [mounted]);
+
+useEffect(() => {
+  if (mounted) {
+    localStorage.setItem("bidFilters", JSON.stringify(filters));
+    localStorage.setItem("bidAppliedFilters", JSON.stringify(appliedFilters));
+  }
+}, [filters, appliedFilters, mounted]);
+
+useEffect(() => {
+  if (!mounted) return;
+
+  // Save bids to Supabase (replace-all approach, simplest and reliable)
+  (async () => {
+    try {
+      // 1) Clear table
+      const { error: delErr } = await supabase
+        .from("active-bids")
+        .delete()
+        .neq("id", "00000000-0000-0000-0000-000000000000");
+
+      if (delErr) throw delErr;
+
+      // 2) Insert all bids
+      if (bids.length > 0) {
+        const rows = bids.map((b) => ({ payload: b }));
+        const { error: insErr } = await supabase.from("active-bids").insert(rows);
+        if (insErr) throw insErr;
+      }
+    } catch (e) {
+      console.error("Failed saving bids to Supabase:", e);
+    }
+  })();
+}, [bids, mounted]);
 
   /* ✅ NEW: one-time backfill for existing rows missing dueDateISO */
   useEffect(() => {
