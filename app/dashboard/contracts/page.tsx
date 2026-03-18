@@ -36,11 +36,13 @@ export default function ContractsPage() {
 
   // Admin-only access
   useEffect(() => {
-    const raw = localStorage.getItem("nexusUser");
-    if (!raw) return router.push("/gate");
-
-    const user = JSON.parse(raw);
-    if (user.role !== "Admin") router.push("/dashboard");
+    fetch("/api/auth/session")
+      .then((r) => r.json())
+      .then((s) => {
+        if (!s?.id) router.push("/gate");
+        else if (s.role !== "Admin") router.push("/dashboard");
+      })
+      .catch(() => router.push("/gate"));
   }, []);
 
   // Load DB

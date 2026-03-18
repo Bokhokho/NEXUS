@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { supabase } from "@/lib/supabaseClient";
 import { DataTable } from "@/components/dashboard/data-table";
 import {
   Dialog,
@@ -23,13 +24,8 @@ import * as ExcelJS from "exceljs";
 import { mockTeamMembers } from "@/lib/mock-data";
 
 
-const INACTIVE_STATUSES = new Set(["Submitted","Cancelled","Dropped"]);
+const INACTIVE_STATUSES = new Set(["Submitted","Cancelled","Dropped","Won","Lost"]);
 const ACTIVE_STATUSES = new Set(["Quoted","In Progress"]);
-
-const loadActive = (): Bid[] =>
-  JSON.parse(localStorage.getItem("bids") || "[]");
-const saveActive = (rows: Bid[]) =>
-  localStorage.setItem("bids", JSON.stringify(rows));
 
 const upsertById = (list: Bid[], row: Bid) => {
   const i = list.findIndex(r => r.id === row.id);
@@ -83,14 +79,16 @@ type Filters = {
 
 export default function InactiveBidsPage() {
   const [mounted, setMounted] = useState(false);
+  const [bids, setBids] = useState<Bid[]>([]);
+  const hasLoadedRef = useRef(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
-  const [bids, setBids] = useState<Bid[]>(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("inactiveBids");
-      return stored ? JSON.parse(stored) : [];
-    }
-    return [];
-  });
+  useEffect(() => {
+    fetch("/api/auth/session")
+      .then((r) => r.json())
+      .then((s) => { if (s?.role === "Admin") setIsAdmin(true); })
+      .catch(() => {});
+  }, []);
 
   const [filters, setFilters] = useState<Filters>(() => {
     if (typeof window !== "undefined") {
@@ -163,15 +161,60 @@ export default function InactiveBidsPage() {
   });
 
   useEffect(() => setMounted(true), []);
+
+  // Load from Supabase
   useEffect(() => {
     if (!mounted) return;
-    localStorage.setItem("inactiveBids", JSON.stringify(bids));
+
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("inactive-bids")
+          .select("payload")
+          .order("created_at", { ascending: true });
+
+        if (error) throw error;
+
+        const loaded = (data ?? []).map((r: any) => r.payload as Bid);
+        setBids(loaded);
+      } catch (e) {
+        console.error("Failed loading inactive bids from Supabase:", e);
+      } finally {
+        hasLoadedRef.current = true;
+      }
+    })();
+  }, [mounted]);
+
+  // Save filters to localStorage
+  useEffect(() => {
+    if (!mounted) return;
     localStorage.setItem("inactiveBidFilters", JSON.stringify(filters));
-    localStorage.setItem(
-      "inactiveBidAppliedFilters",
-      JSON.stringify(appliedFilters)
-    );
-  }, [bids, filters, appliedFilters, mounted]);
+    localStorage.setItem("inactiveBidAppliedFilters", JSON.stringify(appliedFilters));
+  }, [filters, appliedFilters, mounted]);
+
+  // Save bids to Supabase (only after initial load)
+  useEffect(() => {
+    if (!mounted || !hasLoadedRef.current) return;
+
+    (async () => {
+      try {
+        const { error: delErr } = await supabase
+          .from("inactive-bids")
+          .delete()
+          .neq("id", "00000000-0000-0000-0000-000000000000");
+
+        if (delErr) throw delErr;
+
+        if (bids.length > 0) {
+          const rows = bids.map((b) => ({ payload: b }));
+          const { error: insErr } = await supabase.from("inactive-bids").insert(rows);
+          if (insErr) throw insErr;
+        }
+      } catch (e) {
+        console.error("Failed saving inactive bids to Supabase:", e);
+      }
+    })();
+  }, [bids, mounted]);
 
   // backfill old records without ISO
   useEffect(() => {
@@ -219,12 +262,11 @@ export default function InactiveBidsPage() {
   };
 
   const handleDelete = (id: number) => {
-    const pass = prompt("Enter admin password to delete:");
-    if (pass === "admin123") {
-      setBids(prev => prev.filter(b => b.id !== id));
-    } else {
-      alert("Access denied.");
+    if (!isAdmin) {
+      alert("Access denied. Admin only.");
+      return;
     }
+    setBids(prev => prev.filter(b => b.id !== id));
   };
 
   // Excel import (optional for inactive; same mapping)
@@ -310,6 +352,37 @@ export default function InactiveBidsPage() {
     );
   }, [bids, appliedFilters]);
 
+  // Handle moving bid back to active (Supabase-aware)
+  const handleStatusChange = async (bid: Bid, value: string) => {
+    if (ACTIVE_STATUSES.has(value)) {
+      // move back to Active table
+      const updated = { ...bid, status: value };
+      try {
+        const { data: existing } = await supabase
+          .from("active-bids")
+          .select("id")
+          .eq("payload->>id", String(bid.id))
+          .maybeSingle();
+
+        if (existing) {
+          await supabase
+            .from("active-bids")
+            .update({ payload: updated })
+            .eq("payload->>id", String(bid.id));
+        } else {
+          await supabase.from("active-bids").insert({ payload: updated });
+        }
+      } catch (e) {
+        console.error("Failed moving bid to active:", e);
+      }
+      setBids(prev => prev.filter(b => b.id !== bid.id));
+    } else {
+      setBids(prev =>
+        prev.map(b => (b.id === bid.id ? { ...b, status: value } : b))
+      );
+    }
+  };
+
   const columns = [
     { key: "prime", header: "Prime", accessorKey: "prime" },
     { key: "projectTitle", header: "Project Title", accessorKey: "projectTitle" },
@@ -355,44 +428,26 @@ export default function InactiveBidsPage() {
       header: "Status",
       cell: (bid: Bid) => (
         <Select
-      value={bid.status}
-      onValueChange={(value: string) => {
-        if (ACTIVE_STATUSES.has(value)) {
-          // move back to Active
-          setBids(prev => {
-            const moving = prev.find(b => b.id === bid.id);
-            if (!moving) return prev;
-            const updated = { ...moving, status: value };
-
-            const curActive = loadActive();
-            const nextActive = upsertById([...curActive], updated); // dedupe
-            saveActive(nextActive);
-
-            return prev.filter(b => b.id !== bid.id); // remove from Inactive
-          });
-          } else {
-            // stay in Inactive but update status
-            setBids(prev =>
-              prev.map(b => (b.id === bid.id ? { ...b, status: value } : b))
-            );
-          }
-        }}
+          value={bid.status}
+          onValueChange={(value: string) => handleStatusChange(bid, value)}
         >
-        <SelectTrigger className="w-[160px]">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {/* show ALL statuses so you can send it back */}
-          <SelectItem value="Quoted">Quoted</SelectItem>
-          <SelectItem value="In Progress">In Progress</SelectItem>
-          <SelectItem value="Submitted">Submitted</SelectItem>
-          <SelectItem value="Cancelled">Cancelled</SelectItem>
-          <SelectItem value="Dropped">Dropped</SelectItem>
-        </SelectContent>
-      </Select>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {/* show ALL statuses so you can send it back */}
+            <SelectItem value="Quoted">Quoted</SelectItem>
+            <SelectItem value="In Progress">In Progress</SelectItem>
+            <SelectItem value="Submitted">Submitted</SelectItem>
+            <SelectItem value="Won">Won</SelectItem>
+            <SelectItem value="Lost">Lost</SelectItem>
+            <SelectItem value="Cancelled">Cancelled</SelectItem>
+            <SelectItem value="Dropped">Dropped</SelectItem>
+          </SelectContent>
+        </Select>
       ),
     },
-    
+
     { key: "notes", header: "Notes", accessorKey: "notes" },
     {
       key: "actions",
@@ -402,13 +457,15 @@ export default function InactiveBidsPage() {
           <Button variant="outline" size="sm" onClick={() => handleEdit(bid)}>
             Edit
           </Button>
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => handleDelete(bid.id)}
-          >
-            Delete
-          </Button>
+          {isAdmin && (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => handleDelete(bid.id)}
+            >
+              Delete
+            </Button>
+          )}
         </div>
       ),
     },
@@ -579,6 +636,8 @@ export default function InactiveBidsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Submitted">Submitted</SelectItem>
+                    <SelectItem value="Won">Won</SelectItem>
+                    <SelectItem value="Lost">Lost</SelectItem>
                     <SelectItem value="Cancelled">Cancelled</SelectItem>
                     <SelectItem value="Dropped">Dropped</SelectItem>
                   </SelectContent>
@@ -685,6 +744,8 @@ export default function InactiveBidsPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="Submitted">Submitted</SelectItem>
+            <SelectItem value="Won">Won</SelectItem>
+            <SelectItem value="Lost">Lost</SelectItem>
             <SelectItem value="Cancelled">Cancelled</SelectItem>
             <SelectItem value="Dropped">Dropped</SelectItem>
           </SelectContent>
@@ -693,22 +754,7 @@ export default function InactiveBidsPage() {
         <Button variant="default" onClick={() => setAppliedFilters(filters)}>
           Search
         </Button>
-        <Button
-          variant="outline"
-          onClick={() => {
-            const empty: Filters = {
-              prime: "",
-              client: "",
-              setAside: "",
-              dueDate: "",
-              location: "",
-              poc: "",
-              status: "",
-            };
-            setFilters(empty);
-            setAppliedFilters(empty);
-          }}
-        >
+        <Button variant="outline" onClick={clearFilters}>
           Clear Filters
         </Button>
       </div>

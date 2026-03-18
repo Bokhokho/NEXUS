@@ -15,77 +15,92 @@ import {
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/lib/supabaseClient";
 
 export default function DashboardPage() {
   const [period, setPeriod] = useState<"week" | "month" | "year">("week");
 
   const [stats, setStats] = useState({
     submitted: 0,
+    won: 0,
+    lost: 0,
     cancelled: 0,
     dropped: 0,
   });
 
   const [chartData, setChartData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const raw = localStorage.getItem("nexusBids");
-    if (!raw) return;
+    (async () => {
+      setLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from("inactive-bids")
+          .select("payload, created_at");
 
-    const bids = JSON.parse(raw);
-    const now = new Date();
+        if (error) throw error;
 
-    const filtered = bids.filter((b: any) => {
-      const date = new Date(b.createdAt || b.date || Date.now());
+        const rows = (data ?? []).map((r: any) => ({
+          status: r.payload?.status ?? "",
+          createdAt: r.created_at,
+        }));
 
-      if (period === "week") {
-        const diff = (now.getTime() - date.getTime()) / (1000 * 3600 * 24);
-        return diff <= 7;
+        const now = new Date();
+
+        const filtered = rows.filter(({ createdAt }) => {
+          const date = new Date(createdAt);
+          if (period === "week") {
+            return (now.getTime() - date.getTime()) / 86400000 <= 7;
+          }
+          if (period === "month") {
+            return (
+              date.getMonth() === now.getMonth() &&
+              date.getFullYear() === now.getFullYear()
+            );
+          }
+          if (period === "year") {
+            return date.getFullYear() === now.getFullYear();
+          }
+          return true;
+        });
+
+        setStats({
+          submitted: filtered.filter((b) => b.status === "Submitted").length,
+          won: filtered.filter((b) => b.status === "Won").length,
+          lost: filtered.filter((b) => b.status === "Lost").length,
+          cancelled: filtered.filter((b) => b.status === "Cancelled").length,
+          dropped: filtered.filter((b) => b.status === "Dropped").length,
+        });
+
+        const grouped: Record<string, any> = {};
+        filtered.forEach(({ status, createdAt }) => {
+          const key = new Date(createdAt).toLocaleDateString();
+          if (!grouped[key]) {
+            grouped[key] = { date: key, submitted: 0, won: 0, lost: 0, cancelled: 0, dropped: 0 };
+          }
+          if (status === "Submitted") grouped[key].submitted++;
+          if (status === "Won") grouped[key].won++;
+          if (status === "Lost") grouped[key].lost++;
+          if (status === "Cancelled") grouped[key].cancelled++;
+          if (status === "Dropped") grouped[key].dropped++;
+        });
+
+        setChartData(Object.values(grouped).sort(
+          (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+        ));
+      } catch (e) {
+        console.error("Dashboard fetch failed:", e);
+      } finally {
+        setLoading(false);
       }
-
-      if (period === "month") {
-        return (
-          date.getMonth() === now.getMonth() &&
-          date.getFullYear() === now.getFullYear()
-        );
-      }
-
-      if (period === "year") {
-        return date.getFullYear() === now.getFullYear();
-      }
-    });
-
-    // KPI Stats
-    setStats({
-      submitted: filtered.filter((b: any) => b.status === "Submitted").length,
-      cancelled: filtered.filter((b: any) => b.status === "Cancelled").length,
-      dropped: filtered.filter((b: any) => b.status === "Dropped").length,
-    });
-
-    // Chart Data (group by day)
-    const grouped: Record<string, any> = {};
-
-    filtered.forEach((b: any) => {
-      const dateKey = new Date(
-        b.createdAt || b.date || Date.now()
-      ).toLocaleDateString();
-
-      if (!grouped[dateKey]) {
-        grouped[dateKey] = { date: dateKey, submitted: 0, cancelled: 0, dropped: 0 };
-      }
-
-      if (b.status === "Submitted") grouped[dateKey].submitted++;
-      if (b.status === "Cancelled") grouped[dateKey].cancelled++;
-      if (b.status === "Dropped") grouped[dateKey].dropped++;
-    });
-
-    setChartData(Object.values(grouped));
+    })();
   }, [period]);
 
   return (
     <div className="p-6 space-y-8">
       <h1 className="text-3xl font-bold">Dashboard Analytics</h1>
 
-      {/* Period Selection */}
       <div className="flex gap-3">
         <Button
           variant={period === "week" ? "default" : "outline"}
@@ -107,27 +122,40 @@ export default function DashboardPage() {
         </Button>
       </div>
 
-      {/* KPI CARDS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Card className="bg-card shadow">
           <CardHeader>
-            <CardTitle className="text-sm text-muted-foreground">
-              Submitted
-            </CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">Submitted</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-5xl font-bold">{stats.submitted}</p>
+            <p className="text-4xl font-bold">{loading ? "—" : stats.submitted}</p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card shadow border-green-500/30">
+          <CardHeader>
+            <CardTitle className="text-sm text-green-500">Won</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-4xl font-bold text-green-500">{loading ? "—" : stats.won}</p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card shadow border-red-500/30">
+          <CardHeader>
+            <CardTitle className="text-sm text-red-500">Lost</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-4xl font-bold text-red-500">{loading ? "—" : stats.lost}</p>
           </CardContent>
         </Card>
 
         <Card className="bg-card shadow">
           <CardHeader>
-            <CardTitle className="text-sm text-muted-foreground">
-              Cancelled
-            </CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">Cancelled</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-5xl font-bold">{stats.cancelled}</p>
+            <p className="text-4xl font-bold">{loading ? "—" : stats.cancelled}</p>
           </CardContent>
         </Card>
 
@@ -136,12 +164,11 @@ export default function DashboardPage() {
             <CardTitle className="text-sm text-muted-foreground">Dropped</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-5xl font-bold">{stats.dropped}</p>
+            <p className="text-4xl font-bold">{loading ? "—" : stats.dropped}</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* BAR CHART */}
       <Card className="p-6 shadow">
         <CardHeader>
           <CardTitle>Bids Activity Breakdown</CardTitle>
@@ -155,6 +182,8 @@ export default function DashboardPage() {
                 <YAxis allowDecimals={false} />
                 <Tooltip />
                 <Bar dataKey="submitted" fill="#7c3aed" />
+                <Bar dataKey="won" fill="#16a34a" />
+                <Bar dataKey="lost" fill="#dc2626" />
                 <Bar dataKey="cancelled" fill="#e11d48" />
                 <Bar dataKey="dropped" fill="#475569" />
               </BarChart>
@@ -163,7 +192,6 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      {/* LINE CHART */}
       <Card className="p-6 shadow">
         <CardHeader>
           <CardTitle>Submission Trend</CardTitle>
@@ -176,7 +204,12 @@ export default function DashboardPage() {
                 <XAxis dataKey="date" />
                 <YAxis allowDecimals={false} />
                 <Tooltip />
-                <Line type="monotone" dataKey="submitted" stroke="#7c3aed" strokeWidth={2} />
+                <Line
+                  type="monotone"
+                  dataKey="submitted"
+                  stroke="#7c3aed"
+                  strokeWidth={2}
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>

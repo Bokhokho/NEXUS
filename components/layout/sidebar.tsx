@@ -18,6 +18,7 @@ import {
   Search,
   FolderClosed,
   FolderClock,
+  Radio,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -27,19 +28,20 @@ export default function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
-  const [user, setUser] = useState<any>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    const u = localStorage.getItem("nexusUser");
-    if (u) setUser(JSON.parse(u));
+    fetch("/api/auth/session")
+      .then((r) => r.json())
+      .then((s) => { if (s?.role === "Admin") setIsAdmin(true); })
+      .catch(() => {});
   }, []);
-
-  const isAdmin = user?.name === "Oussama Ahizoune";
 
   const navItems = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/dashboard/active-bids", label: "Active Bids", icon: FolderClock },
     { href: "/dashboard/inactive-bids", label: "Inactive Bids", icon: FolderClosed },
+    { href: "/dashboard/pipeline", label: "Pipeline", icon: Radio },
     { href: "/dashboard/importer", label: "Importer", icon: Search },
     { href: "/dashboard/contracts", label: "Contracts", icon: FileText },
     { href: "/dashboard/past-performances", label: "Past Performances", icon: FileCheck },

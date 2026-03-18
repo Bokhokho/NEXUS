@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { DataTable } from "@/components/dashboard/data-table";
 import {
@@ -23,18 +23,7 @@ import { ExternalLink } from "lucide-react";
 import * as ExcelJS from "exceljs";
 import { mockTeamMembers } from "@/lib/mock-data";
 
-const INACTIVE_STATUSES = new Set(["Submitted","Cancelled","Dropped"]);
-
-const loadInactive = (): Bid[] =>
-  JSON.parse(localStorage.getItem("inactiveBids") || "[]");
-const saveInactive = (rows: Bid[]) =>
-  localStorage.setItem("inactiveBids", JSON.stringify(rows));
-
-const upsertById = (list: Bid[], row: Bid) => {
-  const i = list.findIndex(r => r.id === row.id);
-  if (i >= 0) list[i] = row; else list.push(row);
-  return list;
-};
+const INACTIVE_STATUSES = new Set(["Submitted","Cancelled","Dropped","Won","Lost"]);
 
 
 
@@ -90,6 +79,15 @@ type Filters = {
 export default function ActiveBidsPage() {
   const [mounted, setMounted] = useState(false);
   const [bids, setBids] = useState<Bid[]>([]);
+  const hasLoadedRef = useRef(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/auth/session")
+      .then((r) => r.json())
+      .then((s) => { if (s?.role === "Admin") setIsAdmin(true); })
+      .catch(() => {});
+  }, []);
 
   const [filters, setFilters] = useState<Filters>(() => {
     if (typeof window !== "undefined") {
@@ -181,6 +179,8 @@ export default function ActiveBidsPage() {
       setBids(loaded);
     } catch (e) {
       console.error("Failed loading bids from Supabase:", e);
+    } finally {
+      hasLoadedRef.current = true;
     }
   })();
 }, [mounted]);
@@ -193,7 +193,7 @@ useEffect(() => {
 }, [filters, appliedFilters, mounted]);
 
 useEffect(() => {
-  if (!mounted) return;
+  if (!mounted || !hasLoadedRef.current) return;
 
   // Save bids to Supabase (replace-all approach, simplest and reliable)
   (async () => {
@@ -268,12 +268,11 @@ useEffect(() => {
   };
 
   const handleDelete = (id: number) => {
-    const pass = prompt("Enter admin password to delete:");
-    if (pass === "admin123") {
-      setBids((prev) => prev.filter((b) => b.id !== id));
-    } else {
-      alert("Access denied.");
+    if (!isAdmin) {
+      alert("Access denied. Admin only.");
+      return;
     }
+    setBids((prev) => prev.filter((b) => b.id !== id));
   };
 
   // 🧩 Excel Import
@@ -412,25 +411,21 @@ useEffect(() => {
     cell: (bid: Bid) => (
       <Select
         value={bid.status}
-        onValueChange={(value: string) => {
+        onValueChange={async (value: string) => {
           if (INACTIVE_STATUSES.has(value)) {
-          setBids(prev => {
-            const moving = prev.find(b => b.id === bid.id);
-            if (!moving) return prev;
-            const updated = { ...moving, status: value };
-
-            const curInactive = loadInactive();
-            const nextInactive = upsertById([...curInactive], updated); // dedupe
-            saveInactive(nextInactive);
-
-            return prev.filter(b => b.id !== bid.id); // remove from Active
-          });
-        } else {
-          setBids(prev =>
-            prev.map(b => (b.id === bid.id ? { ...b, status: value } : b))
-          );
-        }
-      }}
+            const updated = { ...bid, status: value };
+            try {
+              await supabase.from("inactive-bids").insert({ payload: updated });
+            } catch (e) {
+              console.error("Failed moving bid to inactive:", e);
+            }
+            setBids(prev => prev.filter(b => b.id !== bid.id));
+          } else {
+            setBids(prev =>
+              prev.map(b => (b.id === bid.id ? { ...b, status: value } : b))
+            );
+          }
+        }}
       >
           <SelectTrigger className="w-[140px]">
             <SelectValue />
@@ -439,6 +434,8 @@ useEffect(() => {
             <SelectItem value="Quoted">Quoted</SelectItem>
             <SelectItem value="In Progress">In Progress</SelectItem>
             <SelectItem value="Submitted">Submitted</SelectItem>
+            <SelectItem value="Won">Won</SelectItem>
+            <SelectItem value="Lost">Lost</SelectItem>
             <SelectItem value="Cancelled">Cancelled</SelectItem>
             <SelectItem value="Dropped">Dropped</SelectItem>
           </SelectContent>
@@ -455,13 +452,15 @@ useEffect(() => {
           <Button variant="outline" size="sm" onClick={() => handleEdit(bid)}>
             Edit
           </Button>
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => handleDelete(bid.id)}
-          >
-            Delete
-          </Button>
+          {isAdmin && (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => handleDelete(bid.id)}
+            >
+              Delete
+            </Button>
+          )}
         </div>
       ),
     },
@@ -728,6 +727,8 @@ useEffect(() => {
             <SelectItem value="Quoted">Quoted</SelectItem>
             <SelectItem value="In Progress">In Progress</SelectItem>
             <SelectItem value="Submitted">Submitted</SelectItem>
+            <SelectItem value="Won">Won</SelectItem>
+            <SelectItem value="Lost">Lost</SelectItem>
             <SelectItem value="Cancelled">Cancelled</SelectItem>
             <SelectItem value="Dropped">Dropped</SelectItem>
           </SelectContent>

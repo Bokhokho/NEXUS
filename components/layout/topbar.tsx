@@ -21,30 +21,26 @@ export default function Topbar() {
   const { theme, setTheme } = useTheme();
   const router = useRouter();
 
-  const [user, setUser] = useState<{ name: string; role: string } | null>(null);
+  const [user, setUser] = useState<{ name: string; role: string; initials: string } | null>(null);
 
   useEffect(() => {
-    const stored = localStorage.getItem("nexusUser");
-    if (stored) {
-      try {
-        setUser(JSON.parse(stored));
-      } catch {
-        setUser(null);
-      }
-    }
+    fetch("/api/auth/session")
+      .then((r) => r.json())
+      .then((s) => { if (s?.name) setUser(s); })
+      .catch(() => {});
   }, []);
 
-  const logout = () => {
-    localStorage.removeItem("nexusUser");
+  const logout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
     router.push("/gate");
   };
 
-  const initials = user?.name
-    ? user.name
+  const initials = user?.initials || user?.name
+    ? (user.initials || user.name
         .split(" ")
-        .map((w) => w[0])
+        .map((w: string) => w[0])
         .join("")
-        .toUpperCase()
+        .toUpperCase())
     : "??";
 
   return (

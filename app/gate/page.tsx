@@ -21,62 +21,54 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
+type TeamMember = { id: string; name: string; role: string };
+
 export default function GatePage() {
   const [password, setPassword] = useState("");
   const [identity, setIdentity] = useState("");
-  const [team, setTeam] = useState<any[]>([]);
+  const [team, setTeam] = useState<TeamMember[]>([]);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const router = useRouter();
 
   useEffect(() => {
-    let savedTeam = localStorage.getItem("nexusTeam");
+    // Load team list (names/roles only, no passwords)
+    fetch("/api/auth/team")
+      .then((r) => r.json())
+      .then((data) => setTeam(data))
+      .catch(() => {});
 
-    if (!savedTeam) {
-      const defaultAdmin = [
-        {
-          id: "oussama",
-          name: "Oussama Ahizoune",
-          email: "oussama@nexus.com",
-          role: "Admin",
-          password: "admin123",
-          initials: "OA",
-        },
-      ];
-      localStorage.setItem("nexusTeam", JSON.stringify(defaultAdmin));
-      savedTeam = JSON.stringify(defaultAdmin);
-    }
-
-    setTeam(JSON.parse(savedTeam));
-
-    const existing = localStorage.getItem("nexusUser");
-    if (existing) router.push("/dashboard");
+    // If already logged in, redirect
+    fetch("/api/auth/session")
+      .then((r) => { if (r.ok) router.push("/dashboard"); })
+      .catch(() => {});
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setLoading(true);
 
-    const member = team.find((m) => m.id === identity);
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: identity, password }),
+      });
 
-    if (!member) {
-      setError("Identity not found.");
-      return;
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || "Login failed.");
+        return;
+      }
+
+      router.push("/dashboard");
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setLoading(false);
     }
-
-    if (member.password !== password) {
-      setError("Incorrect password.");
-      return;
-    }
-
-    const session = {
-      ...member,
-      loggedAt: Date.now(),
-      expiresAt: Date.now() + 1000 * 60 * 60 * 24,
-    };
-
-    localStorage.setItem("nexusUser", JSON.stringify(session));
-    router.push("/dashboard");
   };
 
   return (
@@ -129,8 +121,9 @@ export default function GatePage() {
               type="submit"
               className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white"
               size="lg"
+              disabled={loading}
             >
-              Enter Platform
+              {loading ? "Verifying..." : "Enter Platform"}
             </Button>
           </form>
         </CardContent>
