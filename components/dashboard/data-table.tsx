@@ -30,6 +30,7 @@ import { exportToCSV, exportToExcel } from "@/lib/utils";
 interface Column<T> {
   key: string;
   header: string;
+  accessorKey?: string;
   cell?: (item: T) => React.ReactNode;
   sortable?: boolean;
   filterable?: boolean;
@@ -223,7 +224,7 @@ export function DataTable<T extends Record<string, any>>({
                 <TableHead
                   key={column.key}
                   onClick={() =>
-                    column.sortable !== false && handleSort(column.key)
+                    column.sortable !== false && handleSort(column.accessorKey || column.key)
                   }
                   className={
                     column.sortable !== false
@@ -233,7 +234,7 @@ export function DataTable<T extends Record<string, any>>({
                 >
                   <div className="flex items-center gap-2">
                     {column.header}
-                    {sortKey === column.key && (
+                    {sortKey === (column.accessorKey || column.key) && (
                       <span>{sortDirection === "asc" ? "↑" : "↓"}</span>
                     )}
                   </div>

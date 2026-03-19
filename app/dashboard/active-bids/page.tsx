@@ -272,6 +272,7 @@ useEffect(() => {
       alert("Access denied. Admin only.");
       return;
     }
+    if (!window.confirm("Are you sure you want to permanently delete this bid? This cannot be undone.")) return;
     setBids((prev) => prev.filter((b) => b.id !== id));
   };
 
