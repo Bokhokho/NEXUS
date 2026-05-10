@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { normalizeSamUrl } from "@/lib/utils";
 import { DataTable } from "@/components/dashboard/data-table";
 import {
   Dialog,
@@ -19,13 +20,36 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Columns3, Users } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import * as ExcelJS from "exceljs";
-import { mockTeamMembers } from "@/lib/mock-data";
 
 
 const INACTIVE_STATUSES = new Set(["Submitted","Cancelled","Dropped","Won","Lost"]);
 const ACTIVE_STATUSES = new Set(["Quoted","In Progress"]);
+
+const ALL_COLUMNS = [
+  { key: "prime", label: "Prime" },
+  { key: "projectTitle", label: "Project Title" },
+  { key: "client", label: "Client" },
+  { key: "setAside", label: "Set-Aside" },
+  { key: "dueDate", label: "Due Date" },
+  { key: "dueTime", label: "Due Time" },
+  { key: "dueTimeMA", label: "Due Time (MA)" },
+  { key: "location", label: "Location" },
+  { key: "samLink", label: "SAM Link" },
+  { key: "poc", label: "POC" },
+  { key: "status", label: "Status" },
+  { key: "notes", label: "Notes" },
+  { key: "actions", label: "Actions" },
+];
 
 const upsertById = (list: Bid[], row: Bid) => {
   const i = list.findIndex(r => r.id === row.id);
@@ -82,11 +106,26 @@ export default function InactiveBidsPage() {
   const [bids, setBids] = useState<Bid[]>([]);
   const hasLoadedRef = useRef(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [teamOptions, setTeamOptions] = useState<string[]>([]);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkPoc, setBulkPoc] = useState("");
+  const [bulkSelected, setBulkSelected] = useState<Set<number>>(new Set());
+  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("inactiveBidsVisibleColumns");
+      if (stored) return new Set(JSON.parse(stored));
+    }
+    return new Set(ALL_COLUMNS.map((c) => c.key));
+  });
 
   useEffect(() => {
     fetch("/api/auth/session")
       .then((r) => r.json())
       .then((s) => { if (s?.role === "Admin") setIsAdmin(true); })
+      .catch(() => {});
+    fetch("/api/auth/team")
+      .then((r) => r.json())
+      .then((data: { name: string }[]) => setTeamOptions(data.map((m) => m.name)))
       .catch(() => {});
   }, []);
 
@@ -190,7 +229,8 @@ export default function InactiveBidsPage() {
     if (!mounted) return;
     localStorage.setItem("inactiveBidFilters", JSON.stringify(filters));
     localStorage.setItem("inactiveBidAppliedFilters", JSON.stringify(appliedFilters));
-  }, [filters, appliedFilters, mounted]);
+    localStorage.setItem("inactiveBidsVisibleColumns", JSON.stringify([...visibleColumns]));
+  }, [filters, appliedFilters, visibleColumns, mounted]);
 
   // Save bids to Supabase (only after initial load)
   useEffect(() => {
@@ -338,8 +378,6 @@ export default function InactiveBidsPage() {
     event.target.value = "";
   };
 
-  const teamOptions = mockTeamMembers.map(m => m.name);
-
   const filteredBids = useMemo(() => {
     return bids.filter(b =>
       Object.entries(appliedFilters).every(([key, value]) => {
@@ -410,7 +448,7 @@ export default function InactiveBidsPage() {
             className="flex items-center gap-1"
           >
             <a
-              href={bid.samLink}
+              href={normalizeSamUrl(bid.samLink || "")}
               target="_blank"
               rel="noopener noreferrer"
               className="text-blue-600 flex items-center gap-1"
@@ -472,6 +510,16 @@ export default function InactiveBidsPage() {
     },
   ];
 
+  const handleBulkAssign = () => {
+    if (!bulkPoc || bulkSelected.size === 0) return;
+    setBids((prev) =>
+      prev.map((b) => (bulkSelected.has(b.id) ? { ...b, poc: bulkPoc } : b))
+    );
+    setBulkOpen(false);
+    setBulkPoc("");
+    setBulkSelected(new Set());
+  };
+
   const clearFilters = () => {
     const empty: Filters = {
       prime: "",
@@ -509,6 +557,70 @@ export default function InactiveBidsPage() {
               Import from Excel
             </label>
           </Button>
+
+          <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="flex items-center gap-1" onClick={() => { setBulkPoc(""); setBulkSelected(new Set()); }}>
+                <Users className="w-4 h-4" />
+                Bulk Assign POC
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-h-[90vh] overflow-y-auto max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Bulk Assign POC</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium whitespace-nowrap">Assign to:</span>
+                  <Select value={bulkPoc} onValueChange={setBulkPoc}>
+                    <SelectTrigger className="w-[200px]">
+                      <SelectValue placeholder="Select POC" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {teamOptions.map((name) => (
+                        <SelectItem key={name} value={name}>{name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button variant="ghost" size="sm" onClick={() => setBulkSelected(new Set(filteredBids.map((b) => b.id)))}>
+                    Select All
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setBulkSelected(new Set())}>
+                    Clear
+                  </Button>
+                </div>
+                <div className="border rounded-md divide-y max-h-[50vh] overflow-y-auto">
+                  {filteredBids.map((bid) => (
+                    <label key={bid.id} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="accent-primary w-4 h-4"
+                        checked={bulkSelected.has(bid.id)}
+                        onChange={(e) =>
+                          setBulkSelected((prev) => {
+                            const next = new Set(prev);
+                            e.target.checked ? next.add(bid.id) : next.delete(bid.id);
+                            return next;
+                          })
+                        }
+                      />
+                      <span className="flex-1 text-sm truncate">{bid.projectTitle || "—"}</span>
+                      <span className="text-xs text-muted-foreground">{bid.poc || "No POC"}</span>
+                    </label>
+                  ))}
+                  {filteredBids.length === 0 && (
+                    <p className="text-center text-muted-foreground text-sm py-4">No bids to display</p>
+                  )}
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">{bulkSelected.size} bid{bulkSelected.size !== 1 ? "s" : ""} selected</span>
+                  <Button onClick={handleBulkAssign} disabled={!bulkPoc || bulkSelected.size === 0}>
+                    Apply
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
 
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
@@ -754,9 +866,37 @@ export default function InactiveBidsPage() {
         <Button variant="outline" onClick={clearFilters}>
           Clear Filters
         </Button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="flex items-center gap-1">
+              <Columns3 className="w-4 h-4" />
+              Columns
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {ALL_COLUMNS.map((col) => (
+              <DropdownMenuCheckboxItem
+                key={col.key}
+                checked={visibleColumns.has(col.key)}
+                onCheckedChange={(checked) =>
+                  setVisibleColumns((prev) => {
+                    const next = new Set(prev);
+                    checked ? next.add(col.key) : next.delete(col.key);
+                    return next;
+                  })
+                }
+              >
+                {col.label}
+              </DropdownMenuCheckboxItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
-      {mounted && <DataTable columns={columns} data={filteredBids} />}
+      {mounted && <DataTable columns={columns.filter((c) => visibleColumns.has(c.key))} data={filteredBids} />}
     </div>
   );
 }

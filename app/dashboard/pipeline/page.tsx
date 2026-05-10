@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { normalizeSamUrl } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ExternalLink, Download, Loader2, Search, X } from "lucide-react";
@@ -152,8 +153,9 @@ function oppToBid(o: SamOpp): Omit<Bid, "id"> {
     .filter(Boolean)
     .join(", ");
   const saCode = (o.typeOfSetAside || "").toUpperCase();
-  const samUrl =
-    o.uiLink && o.uiLink !== "null" ? o.uiLink : `https://sam.gov/opp/${o.noticeId}/view`;
+  const samUrl = normalizeSamUrl(
+    o.uiLink && o.uiLink !== "null" ? o.uiLink : `https://sam.gov/opp/${o.noticeId}/view`
+  );
   const orgFull = o.fullParentPathName || o.department || "";
   const client = orgFull.split(".")[0]?.trim() || orgFull;
   return {
@@ -408,10 +410,11 @@ export default function PipelinePage() {
       const toImport = allOpps.filter((o) => selected.has(oppToId(o)));
       const newBids = toImport
         .filter((o) => {
-          const url =
+          const url = normalizeSamUrl(
             o.uiLink && o.uiLink !== "null"
               ? o.uiLink
-              : `https://sam.gov/opp/${o.noticeId}/view`;
+              : `https://sam.gov/opp/${o.noticeId}/view`
+          );
           return !existingLinks.has(url);
         })
         .map((o) => ({
@@ -799,10 +802,11 @@ export default function PipelinePage() {
                     [o.placeOfPerformance?.city?.name, o.placeOfPerformance?.state?.code]
                       .filter(Boolean)
                       .join(", ") || "—";
-                  const samUrl =
+                  const samUrl = normalizeSamUrl(
                     o.uiLink && o.uiLink !== "null"
                       ? o.uiLink
-                      : `https://sam.gov/opp/${o.noticeId}/view`;
+                      : `https://sam.gov/opp/${o.noticeId}/view`
+                  );
                   const poc = Array.isArray(o.pointOfContact)
                     ? o.pointOfContact.find((p) => p.type === "primary") || o.pointOfContact[0]
                     : null;
