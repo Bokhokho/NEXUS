@@ -117,6 +117,7 @@ export default function InactiveBidsPage() {
     }
     return new Set(ALL_COLUMNS.map((c) => c.key));
   });
+  const colPrefLoadedRef = useRef(false);
 
   useEffect(() => {
     fetch("/api/auth/session")
@@ -229,8 +230,18 @@ export default function InactiveBidsPage() {
     if (!mounted) return;
     localStorage.setItem("inactiveBidFilters", JSON.stringify(filters));
     localStorage.setItem("inactiveBidAppliedFilters", JSON.stringify(appliedFilters));
-    localStorage.setItem("inactiveBidsVisibleColumns", JSON.stringify([...visibleColumns]));
-  }, [filters, appliedFilters, visibleColumns, mounted]);
+  }, [filters, appliedFilters, mounted]);
+
+  useEffect(() => {
+    if (!mounted || !colPrefLoadedRef.current) return;
+    const cols = [...visibleColumns];
+    localStorage.setItem("inactiveBidsVisibleColumns", JSON.stringify(cols));
+    fetch("/api/preferences", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: "inactiveBidsVisibleColumns", value: cols }),
+    }).catch(() => {});
+  }, [visibleColumns, mounted]);
 
   // Save bids to Supabase (only after initial load)
   useEffect(() => {
@@ -262,6 +273,20 @@ export default function InactiveBidsPage() {
     setBids(prev =>
       prev.map(b => (b.dueDateISO ? b : { ...b, dueDateISO: toISO(b.dueDate) }))
     );
+  }, [mounted]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    fetch("/api/preferences?key=inactiveBidsVisibleColumns")
+      .then((r) => r.json())
+      .then(({ value }) => {
+        if (Array.isArray(value)) {
+          setVisibleColumns(new Set(value));
+          localStorage.setItem("inactiveBidsVisibleColumns", JSON.stringify(value));
+        }
+      })
+      .catch(() => {})
+      .finally(() => { colPrefLoadedRef.current = true; });
   }, [mounted]);
 
   const resetForm = () =>

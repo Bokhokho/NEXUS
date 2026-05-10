@@ -116,6 +116,7 @@ export default function ActiveBidsPage() {
     }
     return new Set(ALL_COLUMNS.map((c) => c.key));
   });
+  const colPrefLoadedRef = useRef(false);
 
   useEffect(() => {
     fetch("/api/auth/session")
@@ -225,12 +226,21 @@ export default function ActiveBidsPage() {
 }, [mounted]);
 
 useEffect(() => {
-  if (mounted) {
-    localStorage.setItem("bidFilters", JSON.stringify(filters));
-    localStorage.setItem("bidAppliedFilters", JSON.stringify(appliedFilters));
-    localStorage.setItem("activeBidsVisibleColumns", JSON.stringify([...visibleColumns]));
-  }
-}, [filters, appliedFilters, visibleColumns, mounted]);
+  if (!mounted) return;
+  localStorage.setItem("bidFilters", JSON.stringify(filters));
+  localStorage.setItem("bidAppliedFilters", JSON.stringify(appliedFilters));
+}, [filters, appliedFilters, mounted]);
+
+useEffect(() => {
+  if (!mounted || !colPrefLoadedRef.current) return;
+  const cols = [...visibleColumns];
+  localStorage.setItem("activeBidsVisibleColumns", JSON.stringify(cols));
+  fetch("/api/preferences", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ key: "activeBidsVisibleColumns", value: cols }),
+  }).catch(() => {});
+}, [visibleColumns, mounted]);
 
 useEffect(() => {
   if (!mounted || !hasLoadedRef.current) return;
@@ -266,6 +276,20 @@ useEffect(() => {
         b.dueDateISO ? b : { ...b, dueDateISO: toISO(b.dueDate) }
       )
     );
+  }, [mounted]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    fetch("/api/preferences?key=activeBidsVisibleColumns")
+      .then((r) => r.json())
+      .then(({ value }) => {
+        if (Array.isArray(value)) {
+          setVisibleColumns(new Set(value));
+          localStorage.setItem("activeBidsVisibleColumns", JSON.stringify(value));
+        }
+      })
+      .catch(() => {})
+      .finally(() => { colPrefLoadedRef.current = true; });
   }, [mounted]);
 
   const resetForm = () =>
