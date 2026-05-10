@@ -61,19 +61,29 @@ export default function TeamPage() {
       .catch(() => router.replace("/dashboard"));
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editing) {
-      setTeam((prev) =>
-        prev.map((t) => (t.id === editing.id ? { ...t, ...form } : t))
-      );
+      const res = await fetch("/api/auth/team", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editing.id, ...form }),
+      });
+      if (res.ok) {
+        setTeam((prev) =>
+          prev.map((t) => (t.id === editing.id ? { ...t, ...form } : t))
+        );
+      }
     } else {
-      const newMember: TeamMember = {
-        ...form,
-        id: form.name.toLowerCase().replace(/\s+/g, "-"),
-        email: form.email,
-      };
-      setTeam((prev) => [...prev, newMember]);
+      const res = await fetch("/api/auth/team", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTeam((prev) => [...prev, { id: data.id, ...form }]);
+      }
     }
     setForm({ name: "", role: "", email: "" });
     setEditing(null);
@@ -86,8 +96,15 @@ export default function TeamPage() {
     setOpen(true);
   };
 
-  const handleDelete = (id: string) => {
-    setTeam((prev) => prev.filter((t) => t.id !== id));
+  const handleDelete = async (id: string) => {
+    const res = await fetch("/api/auth/team", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    if (res.ok) {
+      setTeam((prev) => prev.filter((t) => t.id !== id));
+    }
   };
 
   const openSetPassword = (member: TeamMember) => {
