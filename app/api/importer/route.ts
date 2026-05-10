@@ -5,7 +5,7 @@ interface Contractor {
   address: string;
   phone: string;
   website: string;
-  source: "SAM.gov" | "OpenStreetMap" | "USASpending.gov";
+  source: "SAM.gov" | "OpenStreetMap" | "USASpending.gov" | "Google Maps";
   naics?: string;
   extra?: string;
 }
@@ -265,6 +265,61 @@ async function fetchSam(keyword: string, location: string): Promise<Contractor[]
   }
 }
 
+// ── Google Maps Places ────────────────────────────────────────────────────────
+async function fetchGoogleMaps(keyword: string, location: string): Promise<Contractor[]> {
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+  if (!apiKey) return [];
+
+  try {
+    const BASE = "https://maps.googleapis.com/maps/api/place";
+    const query = `${keyword} in ${location}`;
+    let nextPageToken: string | undefined;
+    let allResults: any[] = [];
+
+    do {
+      const url = `${BASE}/textsearch/json?query=${encodeURIComponent(query)}&key=${apiKey}${
+        nextPageToken ? `&pagetoken=${nextPageToken}` : ""
+      }`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (!res.ok) break;
+      allResults = allResults.concat(data.results || []);
+      nextPageToken = data.next_page_token;
+      if (nextPageToken) await new Promise((r) => setTimeout(r, 2000));
+    } while (nextPageToken && allResults.length < 60);
+
+    const detailed = await Promise.all(
+      allResults.map(async (place) => {
+        try {
+          const detailUrl = `${BASE}/details/json?place_id=${place.place_id}&fields=name,formatted_address,formatted_phone_number,website&key=${apiKey}`;
+          const res = await fetch(detailUrl);
+          const data = await res.json();
+          const d = data.result || {};
+          return {
+            name: d.name || place.name || "",
+            address: d.formatted_address || place.formatted_address || "",
+            phone: d.formatted_phone_number || "",
+            website: d.website || "",
+            source: "Google Maps" as const,
+          };
+        } catch {
+          return {
+            name: place.name || "",
+            address: place.formatted_address || "",
+            phone: "",
+            website: "",
+            source: "Google Maps" as const,
+          };
+        }
+      })
+    );
+
+    return detailed;
+  } catch {
+    return [];
+  }
+}
+
 // ── Handler ───────────────────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
   const keyword = req.nextUrl.searchParams.get("keyword") || "";
@@ -272,13 +327,15 @@ export async function GET(req: NextRequest) {
 
   if (!keyword || !location) return NextResponse.json({ results: [] });
 
-  const [osmResult, usaResult, samResult] = await Promise.allSettled([
+  const [googleResult, osmResult, usaResult, samResult] = await Promise.allSettled([
+    fetchGoogleMaps(keyword, location),
     fetchOverpass(keyword, location),
     fetchUSASpending(keyword, location),
     fetchSam(keyword, location),
   ]);
 
   const results: Contractor[] = [
+    ...(googleResult.status === "fulfilled" ? googleResult.value : []),
     ...(osmResult.status === "fulfilled" ? osmResult.value : []),
     ...(usaResult.status === "fulfilled" ? usaResult.value : []),
     ...(samResult.status === "fulfilled" ? samResult.value : []),

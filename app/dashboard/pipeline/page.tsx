@@ -64,6 +64,7 @@ const NOTICE_OPTS = [
 ];
 
 const SETASIDE_OPTS = [
+  { val: "NONE", label: "No Set-Aside" },
   { val: "SBA", label: "SBA — Total Small Business" },
   { val: "SBP", label: "SBP — Partial Small Business" },
   { val: "8A", label: "8A — 8(a) Set-Aside" },
@@ -82,6 +83,17 @@ const SETASIDE_OPTS = [
   { val: "ISBEE", label: "ISBEE — Indian Small Business" },
   { val: "BICiv", label: "BICiv — Buy Indian (IHS)" },
 ];
+
+const SETASIDE_VARIANTS: Record<string, string> = {
+  SBA: "SBP", SBP: "SBA",
+  "8A": "8AN", "8AN": "8A",
+  HZC: "HZS", HZS: "HZC",
+  SDVOSBC: "SDVOSBS", SDVOSBS: "SDVOSBC",
+  WOSB: "WOSBSS", WOSBSS: "WOSB",
+  EDWOSB: "EDWOSBSS", EDWOSBSS: "EDWOSB",
+  VSA: "VSS", VSS: "VSA",
+  IEE: "ISBEE", ISBEE: "IEE",
+};
 
 const SETASIDE_SHORT: Record<string, string> = {
   SBA: "SBA", SBP: "SBP", "8A": "8(a)", "8AN": "8(a) SS",
@@ -144,11 +156,6 @@ function oppToBid(o: SamOpp): Omit<Bid, "id"> {
     o.uiLink && o.uiLink !== "null" ? o.uiLink : `https://sam.gov/opp/${o.noticeId}/view`;
   const orgFull = o.fullParentPathName || o.department || "";
   const client = orgFull.split(".")[0]?.trim() || orgFull;
-  const poc = Array.isArray(o.pointOfContact)
-    ? o.pointOfContact.find((p) => p.type === "primary") || o.pointOfContact[0]
-    : null;
-  const pocStr = poc ? [poc.fullName, poc.email].filter(Boolean).join(" | ") : "";
-
   return {
     prime: "",
     projectTitle: o.title || "",
@@ -160,7 +167,7 @@ function oppToBid(o: SamOpp): Omit<Bid, "id"> {
     dueTimeMA,
     location: loc,
     samLink: samUrl,
-    poc: pocStr,
+    poc: "",
     status: "",
     notes: "",
   };
@@ -238,7 +245,7 @@ export default function PipelinePage() {
     if (titleKw) params.set("title", titleKw);
     const notices = [...checkedNotices];
     if (notices.length >= 1) params.set("ptype", notices[0]);
-    const setAsides = [...checkedSetAsides];
+    const setAsides = [...checkedSetAsides].filter((v) => v !== "NONE");
     if (setAsides.length >= 1) params.set("typeOfSetAside", setAsides[0]);
     if (naics) params.set("ncode", naics);
     if (ccode) params.set("ccode", ccode);
@@ -285,10 +292,18 @@ export default function PipelinePage() {
       });
     }
 
-    // Multi-setaside client filter (API only accepts one)
+    // Multi-setaside client filter (API only accepts one; NONE = no set-aside)
     const saArr = [...checkedSetAsides];
-    if (saArr.length > 1) {
-      res = res.filter((o) => saArr.includes((o.typeOfSetAside || "").toUpperCase()));
+    if (saArr.length > 0) {
+      const includeNone = saArr.includes("NONE");
+      const nonNone = saArr.filter((s) => s !== "NONE");
+      if (saArr.length > 1 || includeNone) {
+        res = res.filter((o) => {
+          const sa = (o.typeOfSetAside || "").toUpperCase();
+          if (includeNone && !sa) return true;
+          return nonNone.includes(sa);
+        });
+      }
     }
 
     // Multi-notice client filter (API only accepts one)
@@ -362,7 +377,14 @@ export default function PipelinePage() {
   function toggleSetAside(val: string) {
     setCheckedSetAsides((prev) => {
       const next = new Set(prev);
-      next.has(val) ? next.delete(val) : next.add(val);
+      const variant = SETASIDE_VARIANTS[val];
+      if (next.has(val)) {
+        next.delete(val);
+        if (variant) next.delete(variant);
+      } else {
+        next.add(val);
+        if (variant) next.add(variant);
+      }
       return next;
     });
   }

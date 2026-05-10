@@ -21,7 +21,7 @@ import {
 import { Download, Loader2, Search } from "lucide-react";
 import { exportToExcel } from "@/lib/utils";
 
-type Source = "SAM.gov" | "OpenStreetMap" | "USASpending.gov";
+type Source = "Google Maps" | "SAM.gov" | "OpenStreetMap" | "USASpending.gov";
 
 interface Contractor {
   name: string;
@@ -34,12 +34,14 @@ interface Contractor {
 }
 
 const SOURCE_STYLES: Record<Source, string> = {
+  "Google Maps": "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
   "SAM.gov": "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
   "OpenStreetMap": "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
   "USASpending.gov": "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
 };
 
 const SOURCE_DESCRIPTIONS: Record<Source, string> = {
+  "Google Maps": "Local businesses via Google Places",
   "SAM.gov": "Registered federal contractors",
   "OpenStreetMap": "Locally listed active businesses",
   "USASpending.gov": "Companies with past federal contract awards",
@@ -87,7 +89,7 @@ export default function ImporterPage() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Contractor Importer</h1>
         <p className="text-muted-foreground">
-          Search across SAM.gov, OpenStreetMap, and USASpending.gov simultaneously — all free, no API billing.
+          Search across Google Maps, SAM.gov, OpenStreetMap, and USASpending.gov simultaneously.
         </p>
       </div>
 
@@ -151,6 +153,7 @@ export default function ImporterPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Sources</SelectItem>
+              <SelectItem value="Google Maps">Google Maps only</SelectItem>
               <SelectItem value="SAM.gov">SAM.gov only</SelectItem>
               <SelectItem value="OpenStreetMap">OpenStreetMap only</SelectItem>
               <SelectItem value="USASpending.gov">USASpending.gov only</SelectItem>
@@ -177,7 +180,7 @@ export default function ImporterPage() {
               <TableRow>
                 <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                   {loading
-                    ? "Fetching from SAM.gov, OpenStreetMap, and USASpending.gov..."
+                    ? "Fetching from Google Maps, SAM.gov, OpenStreetMap, and USASpending.gov..."
                     : "No results yet — enter a keyword and location above."}
                 </TableCell>
               </TableRow>

@@ -532,9 +532,7 @@ export default function InactiveBidsPage() {
                     <SelectValue placeholder="Prime" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="EBG">EBG</SelectItem>
-                    <SelectItem value="STRLC">STRLC</SelectItem>
-                    <SelectItem value="AMB">AMB</SelectItem>
+                    <SelectItem value="United Construct">United Construct</SelectItem>
                   </SelectContent>
                 </Select>
 
@@ -669,9 +667,7 @@ export default function InactiveBidsPage() {
             <SelectValue placeholder="Prime" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="EBG">EBG</SelectItem>
-            <SelectItem value="STRLC">STRLC</SelectItem>
-            <SelectItem value="AMB">AMB</SelectItem>
+            <SelectItem value="United Construct">United Construct</SelectItem>
           </SelectContent>
         </Select>
 
