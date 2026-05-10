@@ -10,15 +10,28 @@ const supabase = createClient(
 export async function POST(request: NextRequest) {
   const { id, password } = await request.json();
 
-  const team = JSON.parse(process.env.NEXUS_TEAM_JSON!);
-  const member = team.find((m: any) => m.id === id);
+  // Look up member: env var first, then Supabase team table
+  let member: any = null;
+  try {
+    const team = JSON.parse(process.env.NEXUS_TEAM_JSON || "[]");
+    member = team.find((m: any) => m.id === id) ?? null;
+  } catch {}
+
+  if (!member) {
+    const { data } = await supabase
+      .from("team")
+      .select("id, name, role, email")
+      .eq("id", id)
+      .maybeSingle();
+    if (data) member = data;
+  }
 
   if (!member) {
     return NextResponse.json({ error: "Identity not found." }, { status: 401 });
   }
 
-  // Check Supabase for a password override (set via Team page)
-  let effectiveHash = member.passwordHash;
+  // Password: check Supabase passwords table first, then env hash as fallback
+  let effectiveHash = member.passwordHash ?? null;
   try {
     const { data } = await supabase
       .from("passwords")
@@ -28,15 +41,19 @@ export async function POST(request: NextRequest) {
     if (data?.hash) effectiveHash = data.hash;
   } catch {}
 
-  if (effectiveHash !== hashPassword(password)) {
+  if (!effectiveHash || effectiveHash !== hashPassword(password)) {
     return NextResponse.json({ error: "Incorrect password." }, { status: 401 });
   }
+
+  const initials = member.initials
+    ?? member.name?.split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2)
+    ?? "??";
 
   const payload = {
     id: member.id,
     name: member.name,
     role: member.role,
-    initials: member.initials,
+    initials,
     expiresAt: Date.now() + 1000 * 60 * 60 * 24,
   };
 
@@ -46,7 +63,7 @@ export async function POST(request: NextRequest) {
     id: member.id,
     name: member.name,
     role: member.role,
-    initials: member.initials,
+    initials,
   });
 
   response.cookies.set("nexus_session", token, {
