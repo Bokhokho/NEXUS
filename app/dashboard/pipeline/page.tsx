@@ -1,11 +1,18 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { normalizeSamUrl } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ExternalLink, Download, Loader2, Search, X } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { ExternalLink, Download, Loader2, Search, X, Settings } from "lucide-react";
 
 // ---- Types ----
 type SamOpp = {
@@ -186,8 +193,14 @@ export default function PipelinePage() {
   const today = new Date().toISOString().split("T")[0];
   const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
 
+  // API Settings dialog
+  const [apiSettingsOpen, setApiSettingsOpen] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState("");
+  const [savingKey, setSavingKey] = useState(false);
+  const [saveKeyMsg, setSaveKeyMsg] = useState("");
+
   // Fetch params
-  const [apiKey, setApiKey] = useState("SAM-367a1b7a-3591-42ad-90bc-e3d858a06d2b");
+  const [apiKey, setApiKey] = useState("");
   const [dateFrom, setDateFrom] = useState(yesterday);
   const [dateTo, setDateTo] = useState(today);
   const [titleKw, setTitleKw] = useState("");
@@ -226,8 +239,44 @@ export default function PipelinePage() {
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState("");
 
+  useEffect(() => {
+    fetch("/api/preferences?key=samApiKey")
+      .then((r) => r.json())
+      .then(({ value }) => {
+        if (value) {
+          setApiKey(value);
+          setApiKeyInput(value);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  async function saveApiKey() {
+    if (!apiKeyInput.trim()) return;
+    setSavingKey(true);
+    setSaveKeyMsg("");
+    try {
+      const res = await fetch("/api/preferences", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: "samApiKey", value: apiKeyInput.trim() }),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      setApiKey(apiKeyInput.trim());
+      setSaveKeyMsg("Saved successfully.");
+      setTimeout(() => {
+        setSaveKeyMsg("");
+        setApiSettingsOpen(false);
+      }, 1500);
+    } catch {
+      setSaveKeyMsg("Error saving key.");
+    } finally {
+      setSavingKey(false);
+    }
+  }
+
   async function fetchOpportunities() {
-    if (!apiKey) { setFetchError("Please enter your SAM.gov API key."); return; }
+    if (!apiKey) { setFetchError("No SAM.gov API key set. Click the settings icon to add one."); return; }
     if (!dateFrom || !dateTo) { setFetchError("Posted From and To dates are required."); return; }
 
     setLoading(true);
@@ -481,6 +530,47 @@ export default function PipelinePage() {
               {selected.size} selected
             </span>
           )}
+          <Dialog open={apiSettingsOpen} onOpenChange={(open) => { setApiSettingsOpen(open); setSaveKeyMsg(""); }}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="icon" title="API Settings">
+                <Settings className="w-4 h-4" />
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>API Settings</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 pt-2">
+                <p className="text-sm text-muted-foreground">
+                  Enter your SAM.gov API key. It will be saved permanently to your account.
+                </p>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs text-muted-foreground">SAM.gov API Key</label>
+                  <Input
+                    type="password"
+                    value={apiKeyInput}
+                    onChange={(e) => setApiKeyInput(e.target.value)}
+                    placeholder="SAM-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                    className="font-mono text-xs"
+                    onKeyDown={(e) => { if (e.key === "Enter") saveApiKey(); }}
+                  />
+                </div>
+                {saveKeyMsg && (
+                  <p className={`text-sm ${saveKeyMsg.startsWith("Saved") ? "text-green-500" : "text-red-500"}`}>
+                    {saveKeyMsg}
+                  </p>
+                )}
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setApiSettingsOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={saveApiKey} disabled={savingKey || !apiKeyInput.trim()}>
+                    {savingKey ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
           <Button
             onClick={importToActiveBids}
             disabled={selected.size === 0 || importing}
@@ -510,17 +600,8 @@ export default function PipelinePage() {
 
       {/* Filters */}
       <div className="rounded-lg border bg-card p-4 space-y-3">
-        {/* Row 1: API key + dates + fetch */}
+        {/* Row 1: dates + fetch */}
         <div className="flex flex-wrap gap-2 items-end">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-muted-foreground">API Key</label>
-            <Input
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              className="w-[220px] font-mono text-xs"
-            />
-          </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs text-muted-foreground">Posted From</label>
             <Input
